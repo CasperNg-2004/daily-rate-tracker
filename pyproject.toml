@@ -1,0 +1,22 @@
+[project]
+name = "myr-rate-tracker"
+version = "1.0.0"
+description = "Daily MYR exchange-rate collector, email alerts and live dashboard"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["scripts"]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/W: style, F: real bugs (unused/undefined names), I: import order,
+# B: common bug patterns, UP: modern Python syntax
+select = ["E", "W", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["alerts", "collect", "common"]

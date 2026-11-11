@@ -1,8 +1,10 @@
 # MYR Exchange Rate Tracker
 
-A live dashboard for Malaysian Ringgit (MYR) exchange rates, plus a dataset that grows by itself every day.
+[![CI](https://github.com/CasperNg-2004/myr-rate-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/CasperNg-2004/myr-rate-tracker/actions/workflows/ci.yml)
 
-**Live dashboard:** https://casperng-2004.github.io/daily-rate-tracker/
+A live dashboard for Malaysian Ringgit (MYR) exchange rates, plus a dataset that grows by itself every day and email alerts when rates cross levels you choose.
+
+**Live dashboard:** https://casperng-2004.github.io/myr-rate-tracker/
 
 ## How it works
 
@@ -12,14 +14,34 @@ A live dashboard for Malaysian Ringgit (MYR) exchange rates, plus a dataset that
 | `scripts/collect.py` | Fetches MYR rates from the [Frankfurter API](https://frankfurter.dev) and appends new days to `data/rates.csv`. Back-fills one year of history on the first run, or for a newly added currency, and retries temporary network errors. |
 | `scripts/alerts.py` | Checks the rules in `alerts.json` (price levels and big daily moves) and emails you through Gmail. It validates the rules and explains any mistake. |
 | `scripts/common.py` | Shared config loading and validation. |
-| `.github/workflows/collect.yml` | A GitHub Actions job that runs every day at 09:17 Malaysia time, checks alerts, and commits the new data. It never runs twice at once, still saves the data if the alert step fails, and pulls before pushing to avoid conflicts. |
-| `index.html` | A dashboard on GitHub Pages: live rate cards (refreshed every 5 minutes), a history chart with 1M/3M/6M/1Y ranges, high/low/average stats, and a currency converter. |
+| `index.html` | A dashboard: live rate cards (refreshed every 5 minutes), a history chart with 1M/3M/6M/1Y ranges, high/low/average stats, and a currency converter. |
 
 There's no server and no API key, and it costs nothing to run.
 
+## Automation (GitHub Actions)
+
+| Workflow | When it runs | What it does |
+|---|---|---|
+| `ci.yml` | Every push and pull request | **CI:** lints the code (ruff), checks formatting, and runs the test suite (pytest). **CD:** on `main`, deploys the dashboard only if every check passes. |
+| `collect.yml` | Daily at 09:17 Malaysia time | Collects new rates, sends alerts, commits the data, then redeploys the dashboard. Never runs twice at once, saves the data even if alerts fail, and pulls before pushing. |
+| `deploy.yml` | Called by the two above | Publishes only `index.html`, `config.json` and `data/` to GitHub Pages. |
+
+## Tests
+
+37 tests cover the collector (back-fill, no duplicates, saved history never overwritten, retry and give-up behaviour), the alerts (once-per-crossing, no stale alerts, units, email contents, rule validation), and the real `config.json` and `alerts.json`, so a broken config fails CI before it reaches the live site.
+
+Run them locally:
+
+```bash
+pip install -r requirements-dev.txt
+pytest          # run the tests
+ruff check .    # lint
+ruff format .   # auto-format
+```
+
 ## Tech
 
-Python (standard library only) · GitHub Actions · GitHub Pages · Chart.js · vanilla JavaScript
+Python (standard library only) · pytest · ruff · GitHub Actions (CI/CD, scheduled jobs) · GitHub Pages · Chart.js · vanilla JavaScript
 
 ## Data
 

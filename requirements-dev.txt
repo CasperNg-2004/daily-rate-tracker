@@ -1,0 +1,3 @@
+# Tools for testing and linting (the scripts themselves need nothing extra)
+pytest==9.1.1
+ruff==0.16.9
