@@ -141,25 +141,17 @@
 const API = "https://api.frankfurter.dev/v2/rates";
 const REFRESH_MS = 5 * 60 * 1000;
 
+// Loaded from config.json (shared with the Python scripts).
 // unit = how many units of the foreign currency to price (e.g. RM per 100 JPY)
-const CURRENCIES = {
-  USD: { name: "US Dollar", unit: 1 },
-  SGD: { name: "Singapore Dollar", unit: 1 },
-  CNY: { name: "Chinese Yuan", unit: 1 },
-  EUR: { name: "Euro", unit: 1 },
-  GBP: { name: "British Pound", unit: 1 },
-  JPY: { name: "Japanese Yen", unit: 100 },
-  THB: { name: "Thai Baht", unit: 100 },
-  IDR: { name: "Indonesian Rupiah", unit: 1000 },
-};
-const CODES = Object.keys(CURRENCIES);
+let CURRENCIES = {};
+let CODES = [];
 
 let history = {};   // code -> [{date, value}] sorted; value = RM per 1 unit
 let live = {};      // code -> {date, value}
 let selected = "USD";
 let rangeDays = 90;
 let chart = null;
-let nextRefreshAt = 0;
+let nextRefreshAt = Infinity; // set after the first successful load
 
 const $ = (id) => document.getElementById(id);
 
@@ -180,6 +172,17 @@ function chgHTML(change) {
 }
 
 // ---------- data ----------
+async function loadConfig() {
+  const res = await fetch(`config.json?t=${Date.now()}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`config.json: HTTP ${res.status}`);
+  const cfg = await res.json();
+  CURRENCIES = cfg.currencies || {};
+  for (const c in CURRENCIES) CURRENCIES[c].unit ||= 1;
+  CODES = Object.keys(CURRENCIES);
+  if (!CODES.length) throw new Error("config.json has no currencies");
+  if (!CURRENCIES[selected]) selected = CODES[0];
+}
+
 function parseCSV(text) {
   const out = {};
   const lines = text.trim().split(/\r?\n/).slice(1);
@@ -349,7 +352,7 @@ function fillSelects() {
   $("fromSel").innerHTML = opts;
   $("toSel").innerHTML = opts;
   $("fromSel").value = "MYR";
-  $("toSel").value = "USD";
+  $("toSel").value = CODES.includes("USD") ? "USD" : CODES[0];
 }
 
 // RM per 1 unit for any code (MYR itself = 1)
@@ -391,12 +394,20 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden && Date.now() > nextRefreshAt) fetchLive();
 });
 setInterval(() => {
+  if (!isFinite(nextRefreshAt)) return;
   const s = Math.max(0, Math.round((nextRefreshAt - Date.now()) / 1000));
   $("nextRefresh").textContent = `Next live check in ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}.`;
   if (s === 0 && !document.hidden) fetchLive();
 }, 1000);
 
 (async function init() {
+  try {
+    await loadConfig();
+  } catch (e) {
+    console.error(e);
+    setStatus("offline", "Could not load config.json");
+    return;
+  }
   fillSelects();
   await loadHistory();
   await fetchLive();
