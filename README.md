@@ -1,6 +1,6 @@
 # MYR Exchange Rate Tracker
 
-[![CI](https://github.com/CasperNg-2004/myr-rate-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/CasperNg-2004/myr-rate-tracker/actions/workflows/ci.yml)
+[![CI](https://github.com/CasperNg-2004/daily-rate-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/CasperNg-2004/daily-rate-tracker/actions/workflows/ci.yml)
 
 A live dashboard for Malaysian Ringgit (MYR) exchange rates, plus a dataset that grows by itself every day and email alerts when rates cross levels you choose.
 
