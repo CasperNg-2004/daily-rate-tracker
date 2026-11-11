@@ -1,0 +1,49 @@
+name: Deploy dashboard
+
+# Publishes the dashboard to GitHub Pages.
+# Called by ci.yml (after tests pass) and by collect.yml (after new data is saved).
+# Can also be run by hand from the Actions tab.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deployment at a time; never cancel one halfway through.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Check out the latest commit on the branch (includes today's data commit).
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      # Publish only what the website needs, not the scripts or tests.
+      - name: Build site folder
+        run: |
+          mkdir _site
+          cp index.html config.json _site/
+          if [ -d data ]; then cp -r data _site/; fi
+          ls -R _site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
