@@ -1,0 +1,34 @@
+name: Collect MYR exchange rates
+
+on:
+  schedule:
+    - cron: "17 1 * * *"   # every day at 01:17 UTC = 09:17 Malaysia time
+  workflow_dispatch:         # adds a "Run workflow" button in the Actions tab
+
+permissions:
+  contents: write            # lets the workflow commit the updated CSV
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch latest rates
+        run: python scripts/collect.py
+
+      - name: Commit new data (if any)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/rates.csv
+          if git diff --cached --quiet; then
+            echo "No new data today."
+          else
+            git commit -m "data: update rates $(date -u +%F)"
+            git push
+          fi
