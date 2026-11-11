@@ -1,0 +1,9 @@
+{
+  "name": "myr-rate-tracker",
+  "private": true,
+  "type": "module",
+  "description": "Front-end code for the MYR dashboard and hidden fee checker (no dependencies)",
+  "scripts": {
+    "test": "node --test"
+  }
+}

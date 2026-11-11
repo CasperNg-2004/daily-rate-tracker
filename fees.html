@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hidden Fee Checker · MYR Exchange Rates</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="nav">
+    <a href="./">Dashboard</a>
+    <a href="fees.html" class="current">Hidden fee checker</a>
+  </nav>
+
+  <header>
+    <div>
+      <h1>Hidden fee checker</h1>
+      <div class="sub">See how much a bank, money changer or card really charges, compared with the real exchange rate</div>
+    </div>
+    <div class="status">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Loading rates…</span>
+    </div>
+  </header>
+
+  <div class="grid even">
+    <section class="panel">
+      <h2>Your exchange</h2>
+
+      <label>What do you have?</label>
+      <div class="seg" id="modeSeg">
+        <button data-mode="quote" class="active">A quoted rate</button>
+        <button data-mode="actual">A receipt (paid X, got Y)</button>
+      </div>
+
+      <label>Which way?</label>
+      <div class="seg" id="dirSeg">
+        <button data-dir="buy" class="active">Buying foreign (paying RM)</button>
+        <button data-dir="sell">Selling foreign (getting RM)</button>
+      </div>
+
+      <div class="field-row">
+        <div>
+          <label for="currency">Currency</label>
+          <select id="currency"></select>
+        </div>
+        <div>
+          <label for="date">Date of exchange</label>
+          <input id="date" type="date">
+        </div>
+      </div>
+
+      <label for="foreign" id="foreignLabel">Amount of foreign currency</label>
+      <div class="input-wrap">
+        <input id="foreign" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 1000">
+        <span class="suffix" id="foreignSuffix">USD</span>
+      </div>
+
+      <div id="quoteFields">
+        <label for="quote" id="quoteLabel">Quoted rate</label>
+        <div class="input-wrap">
+          <input id="quote" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 4.15">
+          <span class="suffix">RM</span>
+        </div>
+        <div class="hint" id="quoteHint"></div>
+
+        <label for="fee">Fixed fee (optional)</label>
+        <div class="input-wrap">
+          <input id="fee" type="number" min="0" step="any" inputmode="decimal" placeholder="0">
+          <span class="suffix">RM</span>
+        </div>
+        <div class="hint">Transfer or service fee charged on top, if any.</div>
+      </div>
+
+      <div id="actualFields" hidden>
+        <label for="rm" id="rmLabel">RM you paid</label>
+        <div class="input-wrap">
+          <input id="rm" type="number" min="0" step="any" inputmode="decimal" placeholder="e.g. 2103.40">
+          <span class="suffix">RM</span>
+        </div>
+        <div class="hint">Use the final amount from your receipt or card statement, with all fees included.</div>
+      </div>
+
+      <button class="swap" id="exampleBtn">Try an example</button>
+    </section>
+
+    <section class="panel" aria-live="polite">
+      <h2>Result</h2>
+      <div id="messages"></div>
+      <div id="result">
+        <p class="muted" id="placeholder">Enter your numbers to see the hidden cost.</p>
+      </div>
+
+      <div class="tips">
+        <h3>Good to know</h3>
+        <ul>
+          <li><b>Abroad, card terminal asks "Pay in MYR?"</b> Choosing MYR (dynamic currency conversion) usually adds a big markup. Pick the local currency instead.</li>
+          <li>The <b>real rate</b> is the mid-market rate, the midpoint banks trade at. Every provider adds some margin, so 0% isn't realistic. Use this to compare providers.</li>
+          <li>Ratings are rough guidance, not an official standard. Rates update about once a day, so very small differences (around 0.1–0.3%) can just be the day's movement.</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    Real rates: <a href="https://frankfurter.dev" target="_blank" rel="noopener">Frankfurter API</a> (mid-market reference rates from central banks) and this project's saved history.
+    Everything is calculated in your browser. Nothing you enter is stored or sent anywhere.
+  </footer>
+</div>
+
+<script type="module">
+import * as store from "./data.js";
+import { analyse, rateOn, rmTotalFromQuote, suggestFlip } from "./fees.js";
+
+const $ = (id) => document.getElementById(id);
+const state = { mode: "quote", direction: "buy" };
+let currencies = {};
+let codes = [];
+let history = {};
+let live = {};
+let today = store.todayMY();
+
+const money = (v) => "RM " + v.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const rate4 = (v) => v.toLocaleString("en-MY", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const num = (id) => {
+  const raw = $(id).value.trim();
+  return raw === "" ? null : Number(raw);
+};
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+// ---------- real rate for the chosen currency and date ----------
+function realRate() {
+  const cur = $("currency").value;
+  const date = $("date").value || today;
+  if (date >= today && live[cur]) {
+    return { value: live[cur].value, date: live[cur].date, source: "latest rate" };
+  }
+  const point = rateOn(history[cur] || [], date);
+  if (!point) return null;
+  const source = point.date === date ? "saved rate" : `saved rate from ${point.date} (nearest earlier day)`;
+  return { value: point.value, date: point.date, source };
+}
+
+// ---------- labels that change with the inputs ----------
+function updateLabels() {
+  const cur = $("currency").value;
+  const unit = currencies[cur]?.unit || 1;
+  const buying = state.direction === "buy";
+  $("foreignSuffix").textContent = cur;
+  $("foreignLabel").textContent = buying ? `How much ${cur} are you buying?` : `How much ${cur} are you selling?`;
+  $("quoteLabel").textContent = `Quoted rate (RM per ${unit} ${cur})`;
+  $("rmLabel").textContent = buying ? "RM you paid in total" : "RM you received in total";
+  $("quoteFields").hidden = state.mode !== "quote";
+  $("actualFields").hidden = state.mode !== "actual";
+
+  const real = realRate();
+  $("quoteHint").textContent = real
+    ? `Real rate${real.date === today ? " today" : ` on ${real.date}`}: RM ${rate4(real.value * unit)} per ${unit} ${cur}`
+    : "";
+}
+
+// ---------- main calculation + rendering ----------
+function render() {
+  updateLabels();
+  const messages = [];
+  const cur = $("currency").value;
+  const unit = currencies[cur]?.unit || 1;
+  const real = realRate();
+  const foreign = num("foreign");
+
+  if (!real) {
+    const first = history[cur]?.[0]?.date;
+    show([{ kind: "error", text: first ? `No saved ${cur} rate before ${first}. Pick a later date.` : `No ${cur} rate available yet.` }]);
+    return;
+  }
+
+  let rmTotal = null;
+  if (state.mode === "quote") {
+    const quote = num("quote");
+    if (foreign === null || quote === null) return show([]);
+    const flip = suggestFlip(quote, real.value * unit, unit);
+    if (flip) {
+      messages.push({
+        kind: "info",
+        text: `Did you enter it the other way round (1 MYR = ${quote} ${cur})? That's RM ${rate4(flip)} per ${unit} ${cur}.`,
+        action: { label: `Use RM ${rate4(flip)} per ${unit} ${cur}`, run: () => { $("quote").value = flip.toFixed(4); render(); } },
+      });
+      return show(messages);
+    }
+    rmTotal = rmTotalFromQuote({ direction: state.direction, foreignAmount: foreign, quotedDisplay: quote, unit, fee: num("fee") || 0 });
+  } else {
+    rmTotal = num("rm");
+    if (foreign === null || rmTotal === null) return show([]);
+  }
+
+  const r = analyse({ direction: state.direction, foreignAmount: foreign, rmTotal, mid: real.value });
+  if (!r.ok) return show(r.errors.map((text) => ({ kind: "error", text })));
+  for (const text of r.warnings) messages.push({ kind: "warn", text });
+  show(messages, r, real, cur, unit, foreign);
+}
+
+function show(messages, r, real, cur, unit, foreign) {
+  $("messages").innerHTML = messages
+    .map((m, i) => `<div class="msg ${m.kind}">${esc(m.text)}${m.action ? `<br><button data-action="${i}">${esc(m.action.label)}</button>` : ""}</div>`)
+    .join("");
+  messages.forEach((m, i) => m.action && $("messages").querySelector(`[data-action="${i}"]`).addEventListener("click", m.action.run));
+
+  if (!r) {
+    $("result").innerHTML = messages.length ? "" : `<p class="muted">Enter your numbers to see the hidden cost.</p>`;
+    return;
+  }
+
+  const buying = state.direction === "buy";
+  const pct = Math.max(r.markupPct, 0);
+  const marker = (Math.min(pct, 5) / 5) * 100;
+  const verb = buying ? "pay" : "receive";
+
+  $("result").innerHTML = `
+    <div class="verdict">
+      <div class="label">${buying ? "You pay this much more than the real rate" : "You receive this much less than the real rate"}</div>
+      <div class="cost" id="costValue">${money(r.cost)}</div>
+      <div class="pct">${pct.toFixed(2)}% markup</div>
+      <span class="badge ${r.rating.tone}">${r.rating.label}</span>
+      <div class="note">${esc(r.rating.note)}</div>
+    </div>
+    <div class="scale" aria-hidden="true">
+      <div class="scale-bar"><span></span><span></span><span></span><span></span></div>
+      <div class="scale-marker"><i style="left:${marker}%"></i></div>
+      <div class="scale-labels">
+        <span style="left:0%;transform:none">0%</span><span style="left:10%">0.5%</span>
+        <span style="left:30%">1.5%</span><span style="left:60%">3%</span>
+        <span style="left:100%;transform:translateX(-100%)">5%+</span>
+      </div>
+    </div>
+    <table class="breakdown">
+      <tr><td>Real rate <span class="muted">(${esc(real.source)})</span></td><td>RM ${rate4(real.value * unit)} / ${unit} ${cur}</td></tr>
+      <tr><td>Your effective rate <span class="muted">(fees included)</span></td><td>RM ${rate4(r.effectiveRate * unit)} / ${unit} ${cur}</td></tr>
+      <tr><td>At the real rate you'd ${verb}</td><td>${money(r.fair)}</td></tr>
+      <tr><td>You actually ${verb}</td><td>${money(r.actual)}</td></tr>
+      <tr class="total"><td>Hidden cost</td><td>${money(r.cost)}</td></tr>
+    </table>
+    <p class="muted" style="font-size:.8rem;margin-top:10px">
+      For ${foreign.toLocaleString("en-MY")} ${cur}${state.mode === "quote" && num("fee") ? `, including the RM ${num("fee").toFixed(2)} fee` : ""}.
+    </p>`;
+}
+
+// ---------- wiring ----------
+let timer;
+const renderSoon = () => { clearTimeout(timer); timer = setTimeout(render, 250); };
+
+function setSeg(segId, attr, value) {
+  document.querySelectorAll(`#${segId} button`).forEach((b) => b.classList.toggle("active", b.dataset[attr] === value));
+}
+$("modeSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  state.mode = b.dataset.mode; setSeg("modeSeg", "mode", state.mode); render();
+});
+$("dirSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  state.direction = b.dataset.dir; setSeg("dirSeg", "dir", state.direction); render();
+});
+["foreign", "quote", "fee", "rm"].forEach((id) => $(id).addEventListener("input", renderSoon));
+["currency", "date"].forEach((id) => $(id).addEventListener("change", render));
+
+$("exampleBtn").addEventListener("click", () => {
+  // A typical airport money changer: about 3% worse than the real rate, plus a small fee
+  const cur = codes.includes("USD") ? "USD" : codes[0];
+  const unit = currencies[cur].unit;
+  $("currency").value = cur;
+  $("date").value = today;
+  state.mode = "quote"; state.direction = "buy";
+  setSeg("modeSeg", "mode", "quote"); setSeg("dirSeg", "dir", "buy");
+  const real = realRate();
+  $("foreign").value = 1000;
+  $("quote").value = real ? (real.value * unit * 1.03).toFixed(4) : "";
+  $("fee").value = 10;
+  render();
+});
+
+function setStatus(kind, text) {
+  $("statusDot").className = "dot " + kind;
+  $("statusText").textContent = text;
+}
+
+(async function init() {
+  try {
+    ({ currencies, codes } = await store.loadConfig());
+  } catch (e) {
+    console.error(e);
+    setStatus("offline", "Could not load config.json");
+    return;
+  }
+  $("currency").innerHTML = codes.map((c) => `<option value="${c}">${c} – ${esc(currencies[c].name)}</option>`).join("");
+  $("currency").value = codes.includes("USD") ? "USD" : codes[0];
+
+  history = await store.loadHistory();
+  try {
+    live = await store.fetchLive(codes);
+    setStatus("live", `Live rates dated ${Object.values(live)[0].date}`);
+  } catch (e) {
+    console.warn("Live fetch failed, using saved history:", e);
+    live = store.latestFromHistory(history, codes);
+    const any = Object.values(live)[0];
+    setStatus("offline", any ? `Offline · using saved rates from ${any.date}` : "Offline · no rates available");
+  }
+
+  const firstDates = Object.values(history).map((h) => h[0]?.date).filter(Boolean).sort();
+  $("date").max = today;
+  if (firstDates.length) $("date").min = firstDates[0];
+  $("date").value = today;
+  render();
+})();
+</script>
+</body>
+</html>
