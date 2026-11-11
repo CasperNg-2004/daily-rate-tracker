@@ -23,19 +23,67 @@ import os
 import smtplib
 import sys
 from email.message import EmailMessage
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-RATES_FILE = ROOT / "data" / "rates.csv"
+from common import RATES_FILE, ROOT, ConfigError, fail, load_currencies, read_json
+
 STATE_FILE = ROOT / "data" / "alert_state.json"
 RULES_FILE = ROOT / "alerts.json"
 
-# Same display units as the dashboard
-UNITS = {"JPY": 100, "THB": 100, "IDR": 1000}
+# Display units (RM per 100 JPY etc.), filled from config.json in main()
+UNITS: dict[str, int] = {}
 
 
 def unit(cur: str) -> int:
     return UNITS.get(cur, 1)
+
+
+def validate_rules(rules, codes) -> dict:
+    """Check alerts.json and return it with currency codes upper-cased.
+    Raises ConfigError listing every problem found."""
+    if not isinstance(rules, dict):
+        raise ConfigError("alerts.json must be a JSON object like { \"daily_move_percent\": 1.0, \"levels\": [] }")
+
+    errors = []
+    allowed_top = {"daily_move_percent", "levels"}
+    for key in rules:
+        if key not in allowed_top:
+            errors.append(f'alerts.json: unknown setting "{key}" (allowed: {", ".join(sorted(allowed_top))})')
+
+    move = rules.get("daily_move_percent")
+    if move is not None and (not isinstance(move, (int, float)) or isinstance(move, bool) or move <= 0):
+        errors.append('alerts.json: "daily_move_percent" must be a number above 0, or null to turn it off')
+
+    levels = rules.get("levels", [])
+    if not isinstance(levels, list):
+        errors.append('alerts.json: "levels" must be a list [ ... ]')
+        levels = []
+
+    for i, rule in enumerate(levels, start=1):
+        where = f"alerts.json level rule #{i}"
+        if not isinstance(rule, dict):
+            errors.append(f"{where}: must be an object like {{ \"currency\": \"USD\", \"above\": 4.3 }}")
+            continue
+        for key in rule:
+            if key not in {"currency", "above", "below"}:
+                errors.append(f'{where}: unknown key "{key}" (use "currency", "above" or "below", all lowercase)')
+        cur = rule.get("currency")
+        if not isinstance(cur, str):
+            errors.append(f'{where}: missing "currency"')
+        else:
+            rule["currency"] = cur = cur.strip().upper()
+            if cur not in codes:
+                errors.append(f'{where}: currency "{cur}" is not in config.json ({", ".join(codes)})')
+        directions = [k for k in ("above", "below") if k in rule]
+        if len(directions) != 1:
+            errors.append(f'{where}: needs exactly one of "above" or "below"')
+        else:
+            value = rule[directions[0]]
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+                errors.append(f'{where}: "{directions[0]}" must be a positive number, like 4.30')
+
+    if errors:
+        raise ConfigError("\n".join(errors))
+    return rules
 
 
 def load_rates() -> dict[str, list[tuple[str, float]]]:
@@ -48,12 +96,6 @@ def load_rates() -> dict[str, list[tuple[str, float]]]:
     for v in out.values():
         v.sort()
     return out
-
-
-def load_json(path: Path, default):
-    if path.exists():
-        return json.loads(path.read_text())
-    return default
 
 
 def rule_key(rule: dict) -> str:
@@ -85,7 +127,7 @@ def check(rates, rules, state, latest: str) -> list[str]:
     threshold = rules.get("daily_move_percent")
     if threshold:
         for cur, series in sorted(rates.items()):
-            if len(series) < 2 or series[-1][0] != latest:
+            if cur not in UNITS or len(series) < 2 or series[-1][0] != latest:
                 continue
             (_, prev), (d1, last) = series[-2], series[-1]
             change = (last - prev) / prev * 100
@@ -140,9 +182,15 @@ def main() -> int:
         print("No rates.csv yet; nothing to check.")
         return 0
 
+    try:
+        currencies = load_currencies()
+        rules = validate_rules(read_json(RULES_FILE, default={}), list(currencies))
+        state = read_json(STATE_FILE, default={})
+    except ConfigError as e:
+        return fail(e)
+    UNITS.update({c: info.get("unit", 1) for c, info in currencies.items()})
+
     rates = load_rates()
-    rules = load_json(RULES_FILE, {})
-    state = load_json(STATE_FILE, {})
 
     latest = max(series[-1][0] for series in rates.values())
     if state.get("last_checked_date") == latest:
