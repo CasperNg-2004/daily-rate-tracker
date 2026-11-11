@@ -1,0 +1,12 @@
+{
+  "currencies": {
+    "USD": { "name": "US Dollar", "unit": 1 },
+    "SGD": { "name": "Singapore Dollar", "unit": 1 },
+    "CNY": { "name": "Chinese Yuan", "unit": 1 },
+    "EUR": { "name": "Euro", "unit": 1 },
+    "GBP": { "name": "British Pound", "unit": 1 },
+    "JPY": { "name": "Japanese Yen", "unit": 100 },
+    "THB": { "name": "Thai Baht", "unit": 100 },
+    "IDR": { "name": "Indonesian Rupiah", "unit": 1000 }
+  }
+}
