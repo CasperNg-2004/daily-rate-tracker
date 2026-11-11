@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   test:
-    name: Lint and test
+    name: Python lint and test
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -42,9 +42,23 @@ jobs:
       - name: Run tests (pytest)
         run: pytest -v
 
+  js-test:
+    name: JavaScript tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run tests (node --test)
+        run: node --test
+
   deploy:
     name: Deploy dashboard
-    needs: test                     # <- the gate: no green tests, no deploy
+    needs: [test, js-test]          # <- the gate: no green tests, no deploy
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     permissions:
       contents: read

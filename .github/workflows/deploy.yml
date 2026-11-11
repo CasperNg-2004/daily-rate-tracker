@@ -30,11 +30,12 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
-      # Publish only what the website needs, not the scripts or tests.
+      # Publish only what the website needs (pages, styles, browser JS, config, data),
+      # not the Python scripts or tests.
       - name: Build site folder
         run: |
           mkdir _site
-          cp index.html config.json _site/
+          cp *.html *.css *.js config.json _site/
           if [ -d data ]; then cp -r data _site/; fi
           ls -R _site
 
