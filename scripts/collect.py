@@ -11,6 +11,7 @@ and save them to data/rates.csv.
 
 Uses only the Python standard library, so there is nothing to pip install.
 """
+
 import csv
 import json
 import sys
@@ -25,8 +26,8 @@ API = "https://api.frankfurter.dev/v2/rates"
 BACKFILL_DAYS = 365
 FIELDS = ["date", "currency", "myr_per_unit"]
 
-RETRIES = 3                  # extra attempts after the first one
-RETRY_WAIT_SECONDS = 5       # waits 5s, 10s, 20s between attempts
+RETRIES = 3  # extra attempts after the first one
+RETRY_WAIT_SECONDS = 5  # waits 5s, 10s, 20s between attempts
 RETRY_HTTP_CODES = {429, 500, 502, 503, 504}
 
 
@@ -45,17 +46,14 @@ def fetch_json(url: str):
             if attempt == RETRIES:
                 raise
             reason = str(getattr(e, "reason", e))
-        wait = RETRY_WAIT_SECONDS * 2 ** attempt
+        wait = RETRY_WAIT_SECONDS * 2**attempt
         print(f"Attempt {attempt + 1} failed ({reason}); retrying in {wait}s...")
         time.sleep(wait)
 
 
 def fetch_rates(codes: list[str], start: date, end: date) -> list[dict]:
     """Return Frankfurter rows: [{date, base, quote, rate}, ...] (rate = foreign units per 1 MYR)."""
-    url = (
-        f"{API}?base=MYR&quotes={','.join(codes)}"
-        f"&from={start.isoformat()}&to={end.isoformat()}"
-    )
+    url = f"{API}?base=MYR&quotes={','.join(codes)}&from={start.isoformat()}&to={end.isoformat()}"
     return fetch_json(url)
 
 
@@ -71,7 +69,7 @@ def save(rows: dict[tuple[str, str], str]) -> None:
     with RATES_FILE.open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(FIELDS)
-        for (d, cur) in sorted(rows):
+        for d, cur in sorted(rows):
             writer.writerow([d, cur, rows[(d, cur)]])
 
 

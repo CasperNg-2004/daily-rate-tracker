@@ -5,6 +5,7 @@ config.json is the single place that lists which currencies are tracked and
 which display unit each uses (e.g. RM per 100 JPY). The dashboard reads the
 same file, so adding a currency there updates everything.
 """
+
 import json
 import re
 import sys
@@ -27,7 +28,9 @@ def read_json(path: Path, default=None):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
-        raise ConfigError(f"{path.name} is not valid JSON (line {e.lineno}, column {e.colno}): {e.msg}")
+        raise ConfigError(
+            f"{path.name} is not valid JSON (line {e.lineno}, column {e.colno}): {e.msg}"
+        ) from e
 
 
 def load_currencies() -> dict[str, dict]:

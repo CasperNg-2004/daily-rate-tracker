@@ -17,6 +17,7 @@ Email settings come from environment variables (GitHub Secrets):
   GMAIL_APP_PASSWORD  16-character Google App Password (NOT your normal password)
   ALERT_TO            optional, where to send alerts (defaults to GMAIL_USER)
 """
+
 import csv
 import json
 import os
@@ -41,7 +42,9 @@ def validate_rules(rules, codes) -> dict:
     """Check alerts.json and return it with currency codes upper-cased.
     Raises ConfigError listing every problem found."""
     if not isinstance(rules, dict):
-        raise ConfigError("alerts.json must be a JSON object like { \"daily_move_percent\": 1.0, \"levels\": [] }")
+        raise ConfigError(
+            'alerts.json must be a JSON object like { "daily_move_percent": 1.0, "levels": [] }'
+        )
 
     errors = []
     allowed_top = {"daily_move_percent", "levels"}
@@ -61,11 +64,13 @@ def validate_rules(rules, codes) -> dict:
     for i, rule in enumerate(levels, start=1):
         where = f"alerts.json level rule #{i}"
         if not isinstance(rule, dict):
-            errors.append(f"{where}: must be an object like {{ \"currency\": \"USD\", \"above\": 4.3 }}")
+            errors.append(f'{where}: must be an object like {{ "currency": "USD", "above": 4.3 }}')
             continue
         for key in rule:
             if key not in {"currency", "above", "below"}:
-                errors.append(f'{where}: unknown key "{key}" (use "currency", "above" or "below", all lowercase)')
+                errors.append(
+                    f'{where}: unknown key "{key}" (use "currency", "above" or "below", all lowercase)'
+                )
         cur = rule.get("currency")
         if not isinstance(cur, str):
             errors.append(f'{where}: missing "currency"')
