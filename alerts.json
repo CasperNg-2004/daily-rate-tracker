@@ -1,0 +1,9 @@
+{
+  "daily_move_percent": 1.0,
+  "levels": [
+    { "currency": "USD", "above": 4.30 },
+    { "currency": "USD", "below": 4.00 },
+    { "currency": "SGD", "above": 3.30 },
+    { "currency": "JPY", "below": 2.60 }
+  ]
+}
