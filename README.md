@@ -2,7 +2,7 @@
 
 A live dashboard for Malaysian Ringgit (MYR) exchange rates, plus a dataset that grows by itself every day.
 
-**Live dashboard:** `https://<your-username>.github.io/myr-rate-tracker/`
+**Live dashboard:** https://CasperNg-2004/github.io/myr-rate-tracker/
 
 ## How it works
 
